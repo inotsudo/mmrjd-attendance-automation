@@ -175,24 +175,26 @@ def is_weekend(date_str: str) -> bool:
     return date.weekday() >= 5
 
 def process_attendance_events(events: List, rules: dict) -> dict:
-    sorted_events = sorted(events, key=lambda e: e.timestamp)
+    sorted_events = sorted(events, key=lambda e: e.timestamp if e.timestamp is not None else datetime.min)
     check_ins = [e for e in sorted_events if e.event_type in ('check_in', 'check-in', 'in')]
     check_outs = [e for e in sorted_events if e.event_type in ('check_out', 'check-out', 'out')]
     break_starts = [e for e in sorted_events if e.event_type in ('break_start', 'break beginn', 'break_start')]
     break_ends = [e for e in sorted_events if e.event_type in ('break_end', 'break end', 'break end')]
     check_in: Optional[datetime] = None
     if check_ins:
-        check_in = min(check_ins, key=lambda e: e.timestamp).timestamp
+        check_ins_valid = [e for e in check_ins if e.timestamp is not None]
+check_in = min(check_ins_valid, key=lambda e: e.timestamp).timestamp if check_ins_valid else None
     elif sorted_events:
         check_in = sorted_events[0].timestamp
     check_out: Optional[datetime] = None
     if check_outs:
-        check_out = max(check_outs, key=lambda e: e.timestamp).timestamp
+        check_outs_valid = [e for e in check_outs if e.timestamp is not None]
+check_out = max(check_outs_valid, key=lambda e: e.timestamp).timestamp if check_outs_valid else None
     elif sorted_events:
         check_out = sorted_events[-1].timestamp
     break_duration_minutes = 0
     if break_starts and break_ends:
-        bd = break_ends[0].timestamp - break_starts[0].timestamp
+        bd = (break_ends[0].timestamp if break_ends[0].timestamp is not None else datetime.min) - (break_starts[0].timestamp if break_starts[0].timestamp is not None else datetime.min)
         break_duration_minutes = int(bd.total_seconds() / 60)
     late_minutes = 0
     very_late = False
@@ -207,8 +209,8 @@ def process_attendance_events(events: List, rules: dict) -> dict:
     overtime_minutes = 0
     if check_out:
         ot = datetime.combine(datetime.today(), time.fromisoformat(rules['overtime_threshold']))
-        co_date = check_out.date() if hasattr(check_out, 'date') else datetime.today().date()
-        ot_delta = datetime.co(co_date, time.fromisoformat(rules['overtime_threshold'])) - check_out
+        co_date = check_out.date() if hasattr(check_out, 'date') else None
+        ot_delta = (check_out - ot) if check_out and co_date else timedelta(0)
         if ot_delta.total_seconds() > 0:
             overtime_minutes = int(ot_delta.total_seconds() / 60)
     has_events = len(sorted_events) > 0
@@ -468,14 +470,14 @@ def extract_attendance_events(parsed: dict) -> List[tuple]:
             if 'timestamp' in column_map and column_map['timestamp'] < num_cols:
                 timestamp_str = str(row[column_map['timestamp']]).strip() if column_map['timestamp'] < len(row) else ""
             try:
-                date_obj = parse_timestamp(date_str) if date_str else datetime.now()
-                date_str = date_obj.strftime('%Y-%m-%d')
+                date_obj = parse_timestamp(date_str) if date_str else None
+                date_str = date_obj.strftime('%Y-%m-%d') if date_obj else ""
             except (ValueError, IndexError):
                 date_str = ""
             try:
-                ts = parse_timestamp(timestamp_str) if timestamp_str else datetime.now()
+                ts = parse_timestamp(timestamp_str) if timestamp_str else None
             except ValueError:
-                ts = datetime.now()
+                ts = None
             et = event_type.lower()
             if et in ('in', 'check-in', 'check_in', 'arrival', 'checkin'):
                 et = 'check_in'
@@ -486,7 +488,7 @@ def extract_attendance_events(parsed: dict) -> List[tuple]:
             elif et in ('break end', 'break_end', 'break end'):
                 et = 'break_end'
             else:
-                et = 'check_in'
+                et = event_type  # preserve raw event type
             events.append((employee_id, employee_name, date_str, et, ts))
         except Exception:
             continue
@@ -512,7 +514,7 @@ def process_attendance_endpoint(rules: dict = Depends(lambda: BUSINESS_RULES.dic
         try:
             ts = datetime.fromisoformat(ts_str)
         except ValueError:
-            ts = datetime.now()
+            ts = None
         events.append((emp_id, emp_name, date_str, event_type, ts))
     roster = None
     roster_path = results_dir / "roster.json"
