@@ -1,0 +1,28 @@
+# Secrets and environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node.js
+node_modules/
+.next/
+dist/
+build/
+
+# Local databases and uploads
+*.db
+*.sqlite
+uploads/
+tmp/
+temp/
+
+# Generated reports and confidential source files
+reports/
+private-data/
+attendance-exports/
