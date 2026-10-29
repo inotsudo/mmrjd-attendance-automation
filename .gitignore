@@ -22,6 +22,11 @@ uploads/
 tmp/
 temp/
 
+# Logs
+*.log
+backend.log
+frontend.log
+
 # Generated reports and confidential source files
 reports/
 private-data/
